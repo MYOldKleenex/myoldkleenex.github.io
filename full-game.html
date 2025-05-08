@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laser Labyrinth - Full Version</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: white;
+            text-align: center;
+        }
+        canvas {
+            display: block;
+            margin: 10px auto;
+            border: 2px solid #444;
+            max-width: 100%;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover, button:active {
+            background-color: #2980b9;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 5px auto 15px;
+            max-width: 300px;
+        }
+        .row {
+            display: flex;
+            width: 100%;
+            justify-content: center;
+        }
+        .spacer {
+            width: 50px;
+        }
+        h1 {
+            margin: 10px 0;
+            color: #3498db;
+        }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            max-width: 400px;
+            margin: 10px auto;
+            padding: 0 10px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 10;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #333;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            width: 350px;
+            text-align: center;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+            color: #3498db;
+        }
+        .modal-content ul {
+            text-align: left;
+            margin: 20px 0;
+        }
+        .modal-content li {
+            margin-bottom: 10px;
+        }
+        .modal-content button {
+            margin-top: 15px;
+        }
+        .show {
+            display: flex;
+        }
+        #message {
+            min-height: 20px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Laser Labyrinth</h1>
+    <div class="game-info">
+        <span>Level: <span id="level-display">1</span></span>
+        <button id="help-btn">How to Play</button>
+        <button id="restart-btn">Restart Level</button>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    
+    <div class="controls">
+        <div class="row">
+            <button id="btn-up">↑</button>
+        </div>
+        <div class="row">
+            <button id="btn-left">←</button>
+            <div class="spacer"></div>
+            <button id="btn-right">→</button>
+        </div>
+        <div class="row">
+            <button id="btn-down">↓</button>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+            <button id="btn-laser">Fire Laser</button>
+        </div>
+    </div>
+    
+    <div id="message"></div>
+    
+    <!-- Modals -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content">
+            <h2>How to Play</h2>
+            <ul>
+                <li>Use arrow buttons to move the robot</li>
+                <li>The robot slides until it hits a wall</li>
+                <li>Tap "Fire Laser" to shoot lasers in all directions</li>
+                <li>Hit all yellow targets to complete the level</li>
+                <li>Mirrors (↗) will reflect lasers at 90° angles</li>
+                <li>Fixed emitters shoot lasers automatically</li>
+            </ul>
+            <button id="close-help-btn">Close</button>
+        </div>
+    </div>
+    
+    <div id="level-complete" class="modal">
+        <div class="modal-content">
+            <h2>Level Complete!</h2>
+            <p>All targets hit successfully.</p>
+            <button id="next-level-btn">Next Level</button>
+        </div>
+    </div>
+    
+    <div id="game-complete" class="modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p>You've completed all levels of Laser Labyrinth!</p>
+            <button id="restart-game-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let tileSize = 40;
+        
+        // Game state
+        let currentLevel = 0;
+        let gameActive = true;
+        let lasers = [];
+        
+        // Define levels
+        const LEVELS = [
+            {
+                gridSize: 8,
+                robot: { x: 0, y: 0 },
+                walls: [
+                    { x: 3, y: 3 },
+                    { x: 4, y: 4 },
+                    { x: 2, y: 5 }
+                ],
+                mirrors: [
+                    { x: 2, y: 2, direction: "right-up" },  // ↗
+                    { x: 5, y: 1, direction: "left-up" }    // ↖
+                ],
+                targets: [
+                    { x: 7, y: 1, hit: false }
+                ],
+                emitters: []  // No fixed emitters in level 1
+            },
+            {
+                gridSize: 8,
+                robot: { x: 0, y: 7 },
+                walls: [
+                    { x: 2, y: 2 }, { x: 2, y: 3 }, { x: 2, y: 4 }, { x: 2, y: 5 },
+                    { x: 3, y: 5 }, { x: 4, y: 5 }, { x: 5, y: 5 },
+                    { x: 5, y: 3 }, { x: 5, y: 2 }, { x: 5, y: 1 }
+                ],
+                mirrors: [
+                    { x: 1, y: 3, direction: "right-down" },  // ↘
+                    { x: 4, y: 0, direction: "right-up" },    // ↗
+                    { x: 7, y: 4, direction: "left-up" }      // ↖
+                ],
+                targets: [
+                    { x: 6, y: 0, hit: false },
+                    { x: 3, y: 7, hit: false }
+                ],
+                emitters: []
+            },
+            {
+                gridSize: 9,
+                robot: { x: 4, y: 4 },
+                walls: [
+                    { x: 1, y: 1 },
+                    { x: 1, y: 7 },
+                    { x: 7, y: 1 },
+                    { x: 7, y: 7 },
+                    { x: 3, y: 3 },
+                    { x: 3, y: 5 },
+                    { x: 5, y: 3 },
+                    { x: 5, y: 5 }
+                ],
+                mirrors: [
+                    { x: 1, y: 4, direction: "right-up" },    // ↗
+                    { x: 4, y: 1, direction: "right-down" },  // ↘
+                    { x: 7, y: 4, direction: "left-down" },   // ↙
+                    { x: 4, y: 7, direction: "left-up" }      // ↖
+                ],
+                targets: [
+                    { x: 0, y: 0, hit: false },
+                    { x: 0, y: 8, hit: false },
+                    { x: 8, y: 0, hit: false },
+                    { x: 8, y: 8, hit: false }
+                ],
+                emitters: [
+                    { x: 0, y: 4, direction: "right" }
+                ]
+            },
+            {
+                gridSize: 10,
+                robot: { x: 4, y: 6 },
+                walls: [
+                    // Outer walls
+                    { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }, 
+                    { x: 6, y: 1 }, { x: 7, y: 1 }, { x: 8, y: 1 },
+                    { x: 1, y: 8 }, { x: 2, y: 8 }, { x: 3, y: 8 }, 
+                    { x: 6, y: 8 }, { x: 7, y: 8 }, { x: 8, y: 8 },
+                    { x: 1, y: 2 }, { x: 1, y: 3 }, { x: 1, y: 6 }, { x: 1, y: 7 },
+                    { x: 8, y: 2 }, { x: 8, y: 3 }, { x: 8, y: 6 }, { x: 8, y: 7 },
+                    
+                    // Inner obstacles
+                    { x: 4, y: 3 }, { x: 5, y: 3 },
+                    { x: 4, y: 6 }, { x: 5, y: 6 },
+                    { x: 3, y: 4 }, { x: 3, y: 5 },
+                    { x: 6, y: 4 }, { x: 6, y: 5 }
+                ],
+                mirrors: [
+                    { x: 2, y: 2, direction: "right-down" },  // ↘
+                    { x: 7, y: 2, direction: "left-down" },   // ↙
+                    { x: 2, y: 7, direction: "right-up" },    // ↗
+                    { x: 7, y: 7, direction: "left-up" },     // ↖
+                    { x: 4, y: 4, direction: "right-up" },    // ↗
+                    { x: 5, y: 5, direction: "left-down" }    // ↙
+                ],
+                targets: [
+                    { x: 0, y: 0, hit: false },
+                    { x: 9, y: 0, hit: false },
+                    { x: 0, y: 9, hit: false },
+                    { x: 9, y: 9, hit: false },
+                    { x: 4, y: 0, hit: false },
+                    { x: 5, y: 9, hit: false }
+                ],
+                emitters: [
+                    { x: 0, y: 4, direction: "right" },
+                    { x: 9, y: 5, direction: "left" }
+                ]
+            }
+        ];
+        
+        // Current level data
+        let level = null;
+        let robot = null;
+        let walls = [];
+        let mirrors = [];
+        let targets = [];
+        let emitters = [];
+        
+        // Load level
+        function loadLevel(levelIndex) {
+            if (levelIndex >= LEVELS.length) {
+                document.getElementById("game-complete").classList.add("show");
+                gameActive = false;
+                return false;
+            }
+            
+            document.getElementById('level-display').textContent = levelIndex + 1;
+            
+            // Deep clone the level data
+            const levelData = JSON.parse(JSON.stringify(LEVELS[levelIndex]));
+            
+            // Set current level data
+            level = levelData;
+            robot = levelData.robot;
+            walls = levelData.walls;
+            mirrors = levelData.mirrors;
+            targets = levelData.targets.map(t => ({ ...t, hit: false }));
+            emitters = levelData.emitters || [];
+            lasers = [];
+            gameActive = true;
+            
+            // Resize canvas based on grid size
+            resizeCanvas();
+            
+            // Draw the game
+            drawGame();
+            return true;
+        }
+        
+        // Resize canvas based on grid size
+        function resizeCanvas() {
+            // Adjust tile size based on window size and grid size
+            const maxWidth = Math.min(window.innerWidth - 40, 600);
+            const maxHeight = Math.min(window.innerHeight - 250, 600);
+            tileSize = Math.floor(Math.min(maxWidth / level.gridSize, maxHeight / level.gridSize));
+            
+            // Set canvas dimensions
+            canvas.width = level.gridSize * tileSize;
+            canvas.height = level.gridSize * tileSize;
+        }
+        
+        // Draw game elements
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            for (let x = 0; x < level.gridSize; x++) {
+                for (let y = 0; y < level.gridSize; y++) {
+                    ctx.strokeStyle = "#444";
+                    ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                }
+            }
+            
+            // Draw targets
+            targets.forEach(target => {
+                drawTarget(target.x, target.y, target.hit);
+            });
+            
+            // Draw walls
+            ctx.fillStyle = "#ff4444";
+            walls.forEach(wall => {
+                ctx.fillRect(wall.x * tileSize, wall.y * tileSize, tileSize, tileSize);
+            });
+            
+            // Draw mirrors
+            mirrors.forEach(mirror => {
+                drawMirror(mirror.x, mirror.y, mirror.direction);
+            });
+            
+            // Draw emitters
+            emitters.forEach(emitter => {
+                drawEmitter(emitter.x, emitter.y, emitter.direction);
+            });
+            
+            // Draw robot
+            drawRobot();
+            
+            // Draw lasers
+            lasers.forEach(laser => {
+                drawLaser(laser);
+            });
+        }
+        
+        // Draw robot
+        function drawRobot() {
+            const centerX = robot.x * tileSize + tileSize / 2;
+            const centerY = robot.y * tileSize + tileSize / 2;
+            const radius = tileSize * 0.3;
+            
+            ctx.fillStyle = "#00ccff";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = "#005577";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        // Draw mirror
+        function drawMirror(x, y, direction) {
+            const centerX = x * tileSize + tileSize / 2;
+            const centerY = y * tileSize + tileSize / 2;
+            const size = tileSize * 0.7;
+            
+            // Mirror base
+            ctx.fillStyle = "#aaaaaa";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Mirror line
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            switch (direction) {
+                case "right-up": // ↗
+                    ctx.moveTo(centerX - size / 2, centerY + size / 2);
+                    ctx.lineTo(centerX + size / 2, centerY - size / 2);
+                    break;
+                case "right-down": // ↘
+                    ctx.moveTo(centerX - size / 2, centerY - size / 2);
+                    ctx.lineTo(centerX + size / 2, centerY + size / 2);
+                    break;
+                case "left-up": // ↖
+                    ctx.moveTo(centerX + size / 2, centerY + size / 2);
+                    ctx.lineTo(centerX - size / 2, centerY - size / 2);
+                    break;
+                case "left-down": // ↙
+                    ctx.moveTo(centerX + size / 2, centerY - size / 2);
+                    ctx.lineTo(centerX - size / 2, centerY + size / 2);
+                    break;
+            }
+            
+            ctx.stroke();
+        }
+        
+        // Draw emitter
+        function drawEmitter(x, y, direction) {
+            const centerX = x * tileSize + tileSize / 2;
+            const centerY = y * tileSize + tileSize / 2;
+            const size = tileSize * 0.6;
+            
+            // Emitter body
+            ctx.fillStyle = "#ff7700";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Direction indicator
+            ctx.strokeStyle = "#ffdd00";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            switch (direction) {
+                case "up":
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX, centerY - size / 2);
+                    break;
+                case "down":
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX, centerY + size / 2);
+                    break;
+                case "left":
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX - size / 2, centerY);
+                    break;
+                case "right":
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(centerX + size / 2, centerY);
+                    break;
+            }
+            
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = "#ffdd00";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size / 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw target
+        function drawTarget(x, y, isHit) {
+            const centerX = x * tileSize + tileSize / 2;
+            const centerY = y * tileSize + tileSize / 2;
+            const outerRadius = tileSize * 0.35;
+            const innerRadius = tileSize * 0.2;
+            
+            // Outer ring
+            ctx.fillStyle = isHit ? "#00ff00" : "#ffcc00";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Inner circle
+            ctx.fillStyle = "#222";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Center point
+            ctx.fillStyle = isHit ? "#00ff00" : "#ffcc00";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, innerRadius / 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw laser
+        function drawLaser(laser) {
+            ctx.strokeStyle = "#ff0000";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i < laser.path.length - 1; i++) {
+                const start = laser.path[i];
+                const end = laser.path[i + 1];
+                
+                ctx.moveTo(
+                    start.x * tileSize + tileSize / 2,
+                    start.y * tileSize + tileSize / 2
+                );
+                ctx.lineTo(
+                    end.x * tileSize + tileSize / 2,
+                    end.y * tileSize + tileSize / 2
+                );
+            }
+            
+            ctx.stroke();
+            
+            // Glow effect
+            ctx.strokeStyle = "rgba(255, 80, 80, 0.5)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            
+            for (let i = 0; i < laser.path.length - 1; i++) {
+                const start = laser.path[i];
+                const end = laser.path[i + 1];
+                
+                ctx.moveTo(
+                    start.x * tileSize + tileSize / 2,
+                    start.y * tileSize + tileSize / 2
+                );
+                ctx.lineTo(
+                    end.x * tileSize + tileSize / 2,
+                    end.y * tileSize + tileSize / 2
+                );
+            }
+            
+            ctx.stroke();
+        }
+        
+        // Move robot
+        function moveRobot(direction) {
+            if (!gameActive) return false;
+            
+            let newX = robot.x;
+            let newY = robot.y;
+            let moved = false;
+            
+            // Move until hitting a wall or boundary
+            while (true) {
+                let nextX = newX;
+                let nextY = newY;
+                
+                if (direction === "up") nextY--;
+                else if (direction === "down") nextY++;
+                else if (direction === "left") nextX--;
+                else if (direction === "right") nextX++;
+                
+                // Check boundaries
+                if (nextX < 0 || nextX >= level.gridSize || nextY < 0 || nextY >= level.gridSize) {
+                    break;
+                }
+                
+                // Check walls
+                if (walls.some(wall => wall.x === nextX && wall.y === nextY)) {
+                    break;
+                }
+                
+                // Check mirrors
+                if (mirrors.some(mirror => mirror.x === nextX && mirror.y === nextY)) {
+                    break;
+                }
+                
+                // Check emitters
+                if (emitters.some(emitter => emitter.x === nextX && emitter.y === nextY)) {
+                    break;
+                }
+                
+                // Update position
+                newX = nextX;
+                newY = nextY;
+                moved = true;
+            }
+            
+            // Update robot position if moved
+            if (moved) {
+                robot.x = newX;
+                robot.y = newY;
+                drawGame();
+            }
+            
+            return moved;
+        }
+        
+        // Fire lasers from robot or emitters
+        function fireLaser(fromRobot = true) {
+            if (!gameActive) return;
+            
+            // Clear previous lasers
+            lasers = [];
+            
+            if (fromRobot) {
+                // Fire laser in all four directions from robot
+                ["up", "down", "left", "right"].forEach(direction => {
+                    const laser = { 
+                        path: calculateLaserPath(robot.x, robot.y, direction)
+                    };
+                    lasers.push(laser);
+                });
+            }
+            
+            // Fire from fixed emitters
+            emitters.forEach(emitter => {
+                const laser = {
+                    path: calculateLaserPath(emitter.x, emitter.y, emitter.direction)
+                };
+                lasers.push(laser);
+            });
+            
+            drawGame();
+            checkLevelComplete();
+        }
+        
+        // Calculate laser path
+        function calculateLaserPath(startX, startY, startDirection) {
+            const path = [{ x: startX, y: startY }];
+            let currentX = startX;
+            let currentY = startY;
+            let currentDirection = startDirection;
+            let bounceCount = 0;
+            const maxBounces = 20; // Maximum number of reflections to prevent infinite loops
+            
+            while (bounceCount < maxBounces) {
+                let nextX = currentX;
+                let nextY = currentY;
+                
+                // Move one step in current direction
+                switch (currentDirection) {
+                    case "up": nextY--; break;
+                    case "down": nextY++; break;
+                    case "left": nextX--; break;
+                    case "right": nextX++; break;
+                }
+                
+                // Check if out of bounds
+                if (nextX < 0 || nextX >= level.gridSize || nextY < 0 || nextY >= level.gridSize) {
+                    path.push({ x: nextX, y: nextY });
+                    break;
+                }
+                
+                // Check if hit a wall
+                if (walls.some(wall => wall.x === nextX && wall.y === nextY)) {
+                    break;
+                }
+                
+                // Check if hit a mirror
+                const hitMirror = mirrors.find(mirror => mirror.x === nextX && mirror.y === nextY);
+                if (hitMirror) {
+                    currentX = nextX;
+                    currentY = nextY;
+                    path.push({ x: currentX, y: currentY });
+                    
+                    // Determine new direction based on mirror type and incoming direction
+                    currentDirection = reflectLaser(currentDirection, hitMirror.direction);
+                    bounceCount++;
+                } else {
+                    currentX = nextX;
+                    currentY = nextY;
+                    path.push({ x: currentX, y: currentY });
+                }
+                
+                // Check if hit a target
+                const hitTarget = targets.find(target => target.x === currentX && target.y === currentY);
+                if (hitTarget && !hitTarget.hit) {
+                    hitTarget.hit = true;
+                }
+                
+                // Check if hit an emitter (stop laser)
+                if (emitters.some(emitter => emitter.x === currentX && emitter.y === currentY)) {
+                    break;
+                }
+                
+                // Check if hit the robot (continue through)
+                if (currentX === robot.x && currentY === robot.y) {
+                    // Continue through robot
+                }
+            }
+            
+            return path;
+        }
+        
+        // Reflect laser based on mirror type and incoming direction
+        function reflectLaser(incomingDirection, mirrorType) {
+            switch (mirrorType) {
+                case "right-up": // ↗
+                    if (incomingDirection === "right") return "up";
+                    if (incomingDirection === "down") return "left";
+                    if (incomingDirection === "left") return "down";
+                    if (incomingDirection === "up") return "right";
+                    break;
+                case "right-down": // ↘
+                    if (incomingDirection === "right") return "down";
+                    if (incomingDirection === "up") return "left";
+                    if (incomingDirection === "left") return "up";
+                    if (incomingDirection === "down") return "right";
+                    break;
+                case "left-up": // ↖
+                    if (incomingDirection === "left") return "up";
+                    if (incomingDirection === "down") return "right";
+                    if (incomingDirection === "right") return "down";
+                    if (incomingDirection === "up") return "left";
+                    break;
+                case "left-down": // ↙
+                    if (incomingDirection === "left") return "down";
+                    if (incomingDirection === "up") return "right";
+                    if (incomingDirection === "right") return "up";
+                    if (incomingDirection === "down") return "left";
+                    break;
+            }
+            
+            return incomingDirection; // Fallback
+        }
+        
+        // Check if all targets are hit
+        function checkLevelComplete() {
+            const allTargetsHit = targets.every(target => target.hit);
+            
+            if (allTargetsHit) {
+                gameActive = false;
+                showMessage("Level Complete! 🎉");
+                
+                setTimeout(() => {
+                    document.getElementById("level-complete").classList.add("show");
+                }, 1000);
+            }
+        }
+        
+        // Show message
+        function showMessage(msg) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = msg;
+            
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                if (messageEl.textContent === msg) {
+                    messageEl.textContent = '';
+                }
+            }, 3000);
+        }
+        
+        // Restart current level
+        function restartLevel() {
+            loadLevel(currentLevel);
+            closeModals();
+            showMessage("Level restarted");
+        }
+        
+        // Go to next level
+        function nextLevel() {
+            currentLevel++;
+            loadLevel(currentLevel);
+            closeModals();
+            showMessage("Level " + (currentLevel + 1));
+        }
+        
+        // Restart game from beginning
+        function restartGame() {
+            currentLevel = 0;
+            loadLevel(currentLevel);
+            closeModals();
+            showMessage("Game restarted");
+        }
+        
+        // Close all modals
+        function closeModals() {
+            document.getElementById("level-complete").classList.remove("show");
+            document.getElementById("help-modal").classList.remove("show");
+            document.getElementById("game-complete").classList.remove("show");
+        }
+        
+        // Show help
+        function showHelp() {
+            document.getElementById("help-modal").classList.add("show");
+        }
+        
+        // Close help
+        function closeHelp() {
+            document.getElementById("help-modal").classList.remove("show");
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            drawGame();
+        });
+        
+        // Add event listeners for buttons
+        document.getElementById('btn-up').addEventListener('click', () => moveRobot('up'));
+        document.getElementById('btn-down').addEventListener('click', () => moveRobot('down'));
+        document.getElementById('btn-left').addEventListener('click', () => moveRobot('left'));
+        document.getElementById('btn-right').addEventListener('click', () => moveRobot('right'));
+        document.getElementById('btn-laser').addEventListener('click', () => fireLaser(true));
+        document.getElementById('restart-btn').addEventListener('click', restartLevel);
+        document.getElementById('help-btn').addEventListener('click', showHelp);
+        document.getElementById('close-help-btn').addEventListener('click', closeHelp);
+        document.getElementById('next-level-btn').addEventListener('click', nextLevel);
+        document.getElementById('restart-game-btn').addEventListener('click', restartGame);
+        
+        // Add keyboard controls
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowUp') {
+                moveRobot('up');
+                event.preventDefault();
+            } else if (event.key === 'ArrowDown') {
+                moveRobot('down');
+                event.preventDefault();
+            } else if (event.key === 'ArrowLeft') {
+                moveRobot('left');
+                event.preventDefault();
+            } else if (event.key === 'ArrowRight') {
+                moveRobot('right');
+                event.preventDefault();
+            } else if (event.key === ' ' || event.code === 'Space') {
+                fireLaser(true);
+                event.preventDefault();
+            }
+        });
+        
+        // Initialize the first level
+        loadLevel(currentLevel);
+        showMessage("Use arrows or buttons to move. Press Fire Laser to shoot.");
+    </script>
+</body>
+</html>
