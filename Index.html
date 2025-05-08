@@ -102,7 +102,21 @@
             font-weight: bold;
             margin: 5px 0;
         }
-    </style>
+    
+        #coord-display {
+            font-size: 16px;
+            margin-top: 5px;
+            color: #ccc;
+        }
+
+
+        #move-counter {
+            font-size: 16px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+
+</style>
 </head>
 <body>
     <h1>Laser Labyrinth</h1>
@@ -111,7 +125,9 @@
         <button id="help-btn">How to Play</button>
         <button id="restart-btn">Restart Level</button>
     </div>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="move-counter">Moves: 0</div>
+<div id="coord-display">Position: (0, 0)</div>
+<canvas id="gameCanvas" width="400" height="400"></canvas>
     
     <div class="controls">
         <div class="row">
@@ -166,122 +182,5661 @@
 
     <script>
         // Game elements
+let moveCount = 0;
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         let tileSize = 40;
         
-        // Game state
+        
+
+const MIN_MOVES = [
+    7, 4, 18, 9, 10, 17, 5, 8, 7, 5,
+    7, 6, 8, 10, 5, 4, 6, 7, 4, 8,
+    8, 7, 4, 5, 7, 5, 9, 5, 7, 10,
+    4, 7, 8, 7, 6, 4, 8, 5, 9, 7,
+    8, 5, 6, 5, 8, 10, 5
+];
+
+
+// Game state
         let currentLevel = 0;
         let gameActive = true;
         let lasers = [];
         
         // Define levels
         const LEVELS = [
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 0,
+            "y": 0
+        },
+        "walls": [
             {
-                gridSize: 8,
-                robot: { x: 0, y: 0 },
-                walls: [
-                    { x: 3, y: 3 },
-                    { x: 4, y: 4 },
-                    { x: 2, y: 5 }
-                ],
-                mirrors: [
-                    { x: 2, y: 2, direction: "right-up" },  // ↗
-                    { x: 5, y: 1, direction: "left-up" }    // ↖
-                ],
-                targets: [
-                    { x: 7, y: 1, hit: false }
-                ],
-                emitters: []  // No fixed emitters in level 1
+                "x": 3,
+                "y": 3
             },
             {
-                gridSize: 8,
-                robot: { x: 0, y: 7 },
-                walls: [
-                    { x: 2, y: 2 }, { x: 2, y: 3 }, { x: 2, y: 4 }, { x: 2, y: 5 },
-                    { x: 3, y: 5 }, { x: 4, y: 5 }, { x: 5, y: 5 },
-                    { x: 5, y: 3 }, { x: 5, y: 2 }, { x: 5, y: 1 }
-                ],
-                mirrors: [
-                    { x: 1, y: 3, direction: "right-down" },  // ↘
-                    { x: 4, y: 0, direction: "right-up" },    // ↗
-                    { x: 7, y: 4, direction: "left-up" }      // ↖
-                ],
-                targets: [
-                    { x: 6, y: 0, hit: false },
-                    { x: 3, y: 7, hit: false }
-                ],
-                emitters: []
+                "x": 4,
+                "y": 4
             },
             {
-                gridSize: 9,
-                robot: { x: 4, y: 4 },
-                walls: [
-                    { x: 1, y: 1 },
-                    { x: 1, y: 7 },
-                    { x: 7, y: 1 },
-                    { x: 7, y: 7 },
-                    { x: 3, y: 3 },
-                    { x: 3, y: 5 },
-                    { x: 5, y: 3 },
-                    { x: 5, y: 5 }
-                ],
-                mirrors: [
-                    { x: 1, y: 4, direction: "right-up" },    // ↗
-                    { x: 4, y: 1, direction: "right-down" },  // ↘
-                    { x: 7, y: 4, direction: "left-down" },   // ↙
-                    { x: 4, y: 7, direction: "left-up" }      // ↖
-                ],
-                targets: [
-                    { x: 0, y: 0, hit: false },
-                    { x: 0, y: 8, hit: false },
-                    { x: 8, y: 0, hit: false },
-                    { x: 8, y: 8, hit: false }
-                ],
-                emitters: [
-                    { x: 0, y: 4, direction: "right" }
-                ]
-            },
-            {
-                gridSize: 10,
-                robot: { x: 4, y: 6 },
-                walls: [
-                    // Outer walls
-                    { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }, 
-                    { x: 6, y: 1 }, { x: 7, y: 1 }, { x: 8, y: 1 },
-                    { x: 1, y: 8 }, { x: 2, y: 8 }, { x: 3, y: 8 }, 
-                    { x: 6, y: 8 }, { x: 7, y: 8 }, { x: 8, y: 8 },
-                    { x: 1, y: 2 }, { x: 1, y: 3 }, { x: 1, y: 6 }, { x: 1, y: 7 },
-                    { x: 8, y: 2 }, { x: 8, y: 3 }, { x: 8, y: 6 }, { x: 8, y: 7 },
-                    
-                    // Inner obstacles
-                    { x: 4, y: 3 }, { x: 5, y: 3 },
-                    { x: 4, y: 6 }, { x: 5, y: 6 },
-                    { x: 3, y: 4 }, { x: 3, y: 5 },
-                    { x: 6, y: 4 }, { x: 6, y: 5 }
-                ],
-                mirrors: [
-                    { x: 2, y: 2, direction: "right-down" },  // ↘
-                    { x: 7, y: 2, direction: "left-down" },   // ↙
-                    { x: 2, y: 7, direction: "right-up" },    // ↗
-                    { x: 7, y: 7, direction: "left-up" },     // ↖
-                    { x: 4, y: 4, direction: "right-up" },    // ↗
-                    { x: 5, y: 5, direction: "left-down" }    // ↙
-                ],
-                targets: [
-                    { x: 0, y: 0, hit: false },
-                    { x: 9, y: 0, hit: false },
-                    { x: 0, y: 9, hit: false },
-                    { x: 9, y: 9, hit: false },
-                    { x: 4, y: 0, hit: false },
-                    { x: 5, y: 9, hit: false }
-                ],
-                emitters: [
-                    { x: 0, y: 4, direction: "right" },
-                    { x: 9, y: 5, direction: "left" }
-                ]
+                "x": 2,
+                "y": 5
             }
-        ];
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 1,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 0,
+            "y": 7
+        },
+        "walls": [
+            {
+                "x": 2,
+                "y": 2
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 5
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 1
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 7,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 4,
+            "y": 4
+        },
+        "walls": [
+            {
+                "x": 1,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 1
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 1,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 1,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 5,
+            "y": 8
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 5,
+                "y": 4
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 1,
+                "y": 1
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 2,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 3,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 9,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "right"
+            },
+            {
+                "x": 9,
+                "y": 5,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 5,
+            "y": 9
+        },
+        "walls": [
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 9,
+                "y": 9
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 1,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 1,
+                "y": 9,
+                "direction": "right-up"
+            },
+            {
+                "x": 5,
+                "y": 5,
+                "direction": "right-up"
+            },
+            {
+                "x": 2,
+                "y": 7,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 2,
+                "y": 9,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 0,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 8,
+                "y": 7
+            },
+            {
+                "x": 5,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 8,
+                "y": 11
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 10,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 10,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 5,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 5,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 4,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 10,
+            "y": 10
+        },
+        "walls": [
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 8
+            },
+            {
+                "x": 5,
+                "y": 1
+            },
+            {
+                "x": 5,
+                "y": 10
+            },
+            {
+                "x": 8,
+                "y": 9
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "left-up"
+            },
+            {
+                "x": 10,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 11,
+                "y": 11,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 8,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 7,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 0,
+            "y": 11
+        },
+        "walls": [
+            {
+                "x": 8,
+                "y": 8
+            },
+            {
+                "x": 10,
+                "y": 5
+            },
+            {
+                "x": 1,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 3
+            },
+            {
+                "x": 4,
+                "y": 1
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 10,
+                "y": 1,
+                "direction": "right-up"
+            },
+            {
+                "x": 0,
+                "y": 9,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 1,
+                "hit": false
+            }
+        ],
+        "emitters": []
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 4,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 7
+            },
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 9,
+                "y": 8
+            },
+            {
+                "x": 5,
+                "y": 9
+            },
+            {
+                "x": 4,
+                "y": 1
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 9,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 4,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 2,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 0,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 6
+            },
+            {
+                "x": 0,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 6,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 6,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 8,
+            "y": 4
+        },
+        "walls": [
+            {
+                "x": 7,
+                "y": 1
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 5,
+                "y": 7
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 9
+            },
+            {
+                "x": 9,
+                "y": 8
+            },
+            {
+                "x": 3,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 7,
+                "direction": "right-up"
+            },
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 9,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 1,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 1,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 6,
+                "y": 5
+            },
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 1,
+                "y": 7,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 1,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 6,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 3,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 8,
+            "y": 5
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 1,
+                "y": 5
+            },
+            {
+                "x": 1,
+                "y": 8
+            },
+            {
+                "x": 4,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 4,
+                "y": 7
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 7,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 1,
+                "y": 5,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 4,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 2,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 5
+            },
+            {
+                "x": 2,
+                "y": 7
+            },
+            {
+                "x": 4,
+                "y": 6
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 2,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 9,
+                "y": 7,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 9,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 9,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 5,
+            "y": 8
+        },
+        "walls": [
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 2,
+                "y": 1
+            },
+            {
+                "x": 11,
+                "y": 0
+            },
+            {
+                "x": 0,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 3,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 5,
+                "direction": "right-up"
+            },
+            {
+                "x": 9,
+                "y": 11,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 7,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 9,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 11,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 4,
+                "y": 11,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 0,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 7
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 4,
+                "y": 1
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 5,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 4,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 3,
+            "y": 6
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 7,
+                "y": 0
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 5,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 4,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 8,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 7,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 4,
+                "y": 6,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 7,
+            "y": 8
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 4
+            },
+            {
+                "x": 9,
+                "y": 9
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 0
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 2,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 6,
+                "y": 9
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 8,
+                "direction": "right-up"
+            },
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 5,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 8,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 2,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 5,
+                "y": 2,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 1,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 8,
+                "y": 10
+            },
+            {
+                "x": 6,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 9
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 10
+            },
+            {
+                "x": 7,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 2
+            },
+            {
+                "x": 1,
+                "y": 9
+            },
+            {
+                "x": 11,
+                "y": 11
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 10,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 7,
+                "direction": "right-up"
+            },
+            {
+                "x": 5,
+                "y": 3,
+                "direction": "right-up"
+            },
+            {
+                "x": 2,
+                "y": 5,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 3,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 9,
+                "y": 2,
+                "direction": "down"
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 8,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 8
+            },
+            {
+                "x": 1,
+                "y": 8
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 3
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 3,
+                "direction": "right-up"
+            },
+            {
+                "x": 8,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 6,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 7,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 2,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 2,
+            "y": 6
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 0,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 0
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 2,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 5,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 0,
+                "direction": "left"
+            },
+            {
+                "x": 0,
+                "y": 1,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 8,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 4,
+                "y": 10
+            },
+            {
+                "x": 10,
+                "y": 11
+            },
+            {
+                "x": 10,
+                "y": 1
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 9,
+                "y": 5
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 11
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 8,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 9,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 11,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 1,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "right"
+            },
+            {
+                "x": 9,
+                "y": 0,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 3,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 0,
+                "y": 8
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 5,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 2,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 7,
+                "direction": "up"
+            },
+            {
+                "x": 2,
+                "y": 0,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 2,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 9,
+                "y": 0
+            },
+            {
+                "x": 9,
+                "y": 9
+            },
+            {
+                "x": 5,
+                "y": 1
+            },
+            {
+                "x": 7,
+                "y": 9
+            },
+            {
+                "x": 8,
+                "y": 9
+            },
+            {
+                "x": 9,
+                "y": 8
+            },
+            {
+                "x": 5,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 3
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 7,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 3,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "left"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 3,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 1,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 1,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 6
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 4,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 0,
+                "y": 1,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 1,
+                "direction": "right"
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 3,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 0,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 1
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 7
+            },
+            {
+                "x": 0,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 0
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 3,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 5,
+            "y": 10
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 4,
+                "y": 9
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 3
+            },
+            {
+                "x": 6,
+                "y": 6
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 9,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 9,
+                "y": 2,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 1,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 10,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 3,
+                "direction": "right"
+            },
+            {
+                "x": 8,
+                "y": 0,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 2,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 0,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 4,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 4
+            },
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 2,
+                "direction": "left-down"
+            },
+            {
+                "x": 9,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 6,
+                "direction": "right-up"
+            },
+            {
+                "x": 3,
+                "y": 3,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 6,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 9,
+                "direction": "down"
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 9,
+            "y": 1
+        },
+        "walls": [
+            {
+                "x": 8,
+                "y": 4
+            },
+            {
+                "x": 9,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 10
+            },
+            {
+                "x": 1,
+                "y": 8
+            },
+            {
+                "x": 2,
+                "y": 0
+            },
+            {
+                "x": 8,
+                "y": 10
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 9,
+                "y": 8
+            },
+            {
+                "x": 1,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 3
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 9,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 5,
+                "y": 10,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 7,
+                "y": 4,
+                "direction": "right"
+            },
+            {
+                "x": 10,
+                "y": 2,
+                "direction": "up"
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 3,
+            "y": 5
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 1,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 3,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 6,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 0,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 3,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 1,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 1,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 0,
+                "direction": "up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left"
+            },
+            {
+                "x": 4,
+                "y": 6,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 4,
+            "y": 8
+        },
+        "walls": [
+            {
+                "x": 8,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 4,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 6
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 5,
+                "y": 3
+            },
+            {
+                "x": 0,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 5
+            },
+            {
+                "x": 2,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 8,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 7,
+                "direction": "right"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left"
+            },
+            {
+                "x": 8,
+                "y": 8,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 8,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 10
+            },
+            {
+                "x": 1,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 9
+            },
+            {
+                "x": 1,
+                "y": 8
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 10,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 6,
+                "y": 10
+            },
+            {
+                "x": 4,
+                "y": 11
+            },
+            {
+                "x": 11,
+                "y": 11
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 8,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 9,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 3,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "right-up"
+            },
+            {
+                "x": 9,
+                "y": 4,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 1,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 4,
+                "y": 10,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 11,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 7,
+                "y": 8,
+                "direction": "right"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "down"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 6,
+            "y": 6
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 7
+            },
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 7,
+                "y": 1
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 9
+            },
+            {
+                "x": 9,
+                "y": 5
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 7
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 6,
+                "y": 7,
+                "direction": "right-up"
+            },
+            {
+                "x": 8,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 9,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 7,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 4,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 1,
+                "direction": "left"
+            },
+            {
+                "x": 2,
+                "y": 1,
+                "direction": "right"
+            },
+            {
+                "x": 5,
+                "y": 2,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 8,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 7
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 5,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 2,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 6
+            },
+            {
+                "x": 2,
+                "y": 2
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 3,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 6,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 0,
+                "direction": "left"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "right"
+            },
+            {
+                "x": 7,
+                "y": 1,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 7,
+            "y": 4
+        },
+        "walls": [
+            {
+                "x": 11,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 10
+            },
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 5,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 10,
+                "y": 4
+            },
+            {
+                "x": 5,
+                "y": 4
+            },
+            {
+                "x": 11,
+                "y": 9
+            },
+            {
+                "x": 11,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 11
+            },
+            {
+                "x": 4,
+                "y": 1
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 10,
+                "y": 7,
+                "direction": "right-up"
+            },
+            {
+                "x": 9,
+                "y": 9,
+                "direction": "left-down"
+            },
+            {
+                "x": 3,
+                "y": 9,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 4,
+                "direction": "left-up"
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 8,
+                "direction": "right-up"
+            },
+            {
+                "x": 8,
+                "y": 9,
+                "direction": "right-up"
+            },
+            {
+                "x": 3,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 6,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 10,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 11,
+                "hit": false
+            },
+            {
+                "x": 11,
+                "y": 5,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "up"
+            },
+            {
+                "x": 10,
+                "y": 11,
+                "direction": "down"
+            },
+            {
+                "x": 10,
+                "y": 2,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 7,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 2,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 0
+            },
+            {
+                "x": 8,
+                "y": 0
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 6,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 4,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 6,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 7,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left"
+            },
+            {
+                "x": 1,
+                "y": 5,
+                "direction": "up"
+            },
+            {
+                "x": 0,
+                "y": 5,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 10,
+        "robot": {
+            "x": 7,
+            "y": 3
+        },
+        "walls": [
+            {
+                "x": 6,
+                "y": 5
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 3
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 6,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 9
+            },
+            {
+                "x": 3,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 9,
+                "y": 4
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 5,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 2,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 8,
+                "y": 8,
+                "direction": "left-down"
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "direction": "right-up"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 1,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 3,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 3,
+                "direction": "down"
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "direction": "down"
+            },
+            {
+                "x": 0,
+                "y": 9,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 8,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 4,
+                "y": 0
+            },
+            {
+                "x": 5,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 2
+            },
+            {
+                "x": 6,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 5,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 5,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 2,
+                "y": 7,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 0,
+                "y": 7,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 1,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 7,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 8,
+                "y": 7,
+                "direction": "up"
+            },
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "down"
+            },
+            {
+                "x": 0,
+                "y": 6,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 7,
+            "y": 10
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 10
+            },
+            {
+                "x": 4,
+                "y": 0
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 1
+            },
+            {
+                "x": 11,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 0
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 8,
+                "y": 2
+            },
+            {
+                "x": 8,
+                "y": 11
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 2,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 6,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 11,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "left-down"
+            },
+            {
+                "x": 11,
+                "y": 4,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 11,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 11,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 8,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 8,
+                "y": 9,
+                "direction": "down"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "down"
+            },
+            {
+                "x": 1,
+                "y": 10,
+                "direction": "right"
+            },
+            {
+                "x": 11,
+                "y": 5,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 4,
+            "y": 1
+        },
+        "walls": [
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 6,
+                "y": 1
+            },
+            {
+                "x": 5,
+                "y": 7
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 4,
+                "y": 8
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 2,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 8,
+                "direction": "right-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 5,
+                "y": 6,
+                "direction": "left"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "right"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left"
+            },
+            {
+                "x": 2,
+                "y": 1,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 1,
+            "y": 6
+        },
+        "walls": [
+            {
+                "x": 2,
+                "y": 4
+            },
+            {
+                "x": 5,
+                "y": 5
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 3,
+                "y": 1
+            },
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 10
+            },
+            {
+                "x": 2,
+                "y": 9
+            },
+            {
+                "x": 10,
+                "y": 10
+            },
+            {
+                "x": 6,
+                "y": 10
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 1,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 1,
+                "y": 9
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 9,
+                "y": 9,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 6,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 1,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 4,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "left"
+            },
+            {
+                "x": 10,
+                "y": 3,
+                "direction": "right"
+            },
+            {
+                "x": 5,
+                "y": 9,
+                "direction": "right"
+            },
+            {
+                "x": 2,
+                "y": 1,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 2,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 9,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 2
+            },
+            {
+                "x": 0,
+                "y": 10
+            },
+            {
+                "x": 0,
+                "y": 0
+            },
+            {
+                "x": 9,
+                "y": 6
+            },
+            {
+                "x": 10,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 10,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 5,
+                "y": 9
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 2,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 10,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 2,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 8,
+                "y": 5,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 10,
+                "y": 8,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 6,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 10,
+                "hit": false
+            },
+            {
+                "x": 10,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 2,
+                "direction": "left"
+            },
+            {
+                "x": 7,
+                "y": 10,
+                "direction": "down"
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "direction": "down"
+            },
+            {
+                "x": 7,
+                "y": 0,
+                "direction": "left"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 2,
+            "y": 2
+        },
+        "walls": [
+            {
+                "x": 0,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 2
+            },
+            {
+                "x": 10,
+                "y": 2
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 6,
+                "y": 5
+            },
+            {
+                "x": 4,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 0
+            },
+            {
+                "x": 10,
+                "y": 0
+            },
+            {
+                "x": 10,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 5,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 5
+            },
+            {
+                "x": 2,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "right-down"
+            },
+            {
+                "x": 9,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "direction": "right-down"
+            },
+            {
+                "x": 7,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 10,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 8,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 1,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 9,
+                "y": 7,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 1,
+                "y": 9,
+                "direction": "up"
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "up"
+            },
+            {
+                "x": 7,
+                "y": 1,
+                "direction": "left"
+            },
+            {
+                "x": 9,
+                "y": 9,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 2,
+            "y": 4
+        },
+        "walls": [
+            {
+                "x": 10,
+                "y": 8
+            },
+            {
+                "x": 10,
+                "y": 1
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 1,
+                "y": 10
+            },
+            {
+                "x": 2,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 9
+            },
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 2,
+                "y": 5
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 0,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 9,
+                "y": 9,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 4,
+                "direction": "right-up"
+            },
+            {
+                "x": 8,
+                "y": 3,
+                "direction": "right-up"
+            },
+            {
+                "x": 1,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 6,
+                "direction": "right-up"
+            },
+            {
+                "x": 3,
+                "y": 3,
+                "direction": "left-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 9,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 9,
+                "y": 10,
+                "direction": "up"
+            },
+            {
+                "x": 9,
+                "y": 3,
+                "direction": "up"
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "direction": "left"
+            },
+            {
+                "x": 4,
+                "y": 4,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 11,
+        "robot": {
+            "x": 1,
+            "y": 9
+        },
+        "walls": [
+            {
+                "x": 3,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 7
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 5,
+                "y": 8
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 3,
+                "y": 1
+            },
+            {
+                "x": 2,
+                "y": 10
+            },
+            {
+                "x": 4,
+                "y": 6
+            },
+            {
+                "x": 8,
+                "y": 10
+            },
+            {
+                "x": 10,
+                "y": 7
+            },
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 1,
+                "y": 10
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 9
+            },
+            {
+                "x": 10,
+                "y": 2
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 3,
+                "y": 10,
+                "direction": "right-down"
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 9,
+                "y": 4,
+                "direction": "left-up"
+            },
+            {
+                "x": 9,
+                "y": 9,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 8,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 9,
+                "y": 4,
+                "direction": "right-up"
+            }
+        ],
+        "targets": [
+            {
+                "x": 4,
+                "y": 10,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 0,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 5,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 9,
+                "y": 3,
+                "direction": "up"
+            },
+            {
+                "x": 3,
+                "y": 8,
+                "direction": "right"
+            },
+            {
+                "x": 7,
+                "y": 1,
+                "direction": "right"
+            },
+            {
+                "x": 5,
+                "y": 1,
+                "direction": "down"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 4,
+            "y": 0
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 0,
+                "y": 0
+            },
+            {
+                "x": 8,
+                "y": 1
+            },
+            {
+                "x": 6,
+                "y": 8
+            },
+            {
+                "x": 7,
+                "y": 0
+            },
+            {
+                "x": 2,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 7
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 8,
+                "y": 5
+            },
+            {
+                "x": 3,
+                "y": 5
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "left-up"
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 1,
+                "direction": "right-up"
+            },
+            {
+                "x": 4,
+                "y": 6,
+                "direction": "left-up"
+            },
+            {
+                "x": 1,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 8,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 5,
+                "direction": "left"
+            },
+            {
+                "x": 6,
+                "y": 6,
+                "direction": "left"
+            },
+            {
+                "x": 0,
+                "y": 7,
+                "direction": "down"
+            },
+            {
+                "x": 1,
+                "y": 0,
+                "direction": "right"
+            }
+        ]
+    },
+    {
+        "gridSize": 9,
+        "robot": {
+            "x": 4,
+            "y": 8
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 7
+            },
+            {
+                "x": 5,
+                "y": 7
+            },
+            {
+                "x": 0,
+                "y": 6
+            },
+            {
+                "x": 2,
+                "y": 3
+            },
+            {
+                "x": 4,
+                "y": 5
+            },
+            {
+                "x": 8,
+                "y": 3
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 2,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 0,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 3,
+                "y": 6,
+                "direction": "right-down"
+            },
+            {
+                "x": 2,
+                "y": 3,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "direction": "right-down"
+            },
+            {
+                "x": 8,
+                "y": 4,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 4,
+                "y": 7,
+                "direction": "right-down"
+            },
+            {
+                "x": 1,
+                "y": 5,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 3,
+                "y": 0,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 2,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 2,
+                "y": 8,
+                "direction": "right"
+            },
+            {
+                "x": 2,
+                "y": 6,
+                "direction": "right"
+            },
+            {
+                "x": 3,
+                "y": 5,
+                "direction": "right"
+            },
+            {
+                "x": 4,
+                "y": 1,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 12,
+        "robot": {
+            "x": 0,
+            "y": 10
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 4
+            },
+            {
+                "x": 3,
+                "y": 1
+            },
+            {
+                "x": 3,
+                "y": 7
+            },
+            {
+                "x": 2,
+                "y": 10
+            },
+            {
+                "x": 9,
+                "y": 2
+            },
+            {
+                "x": 11,
+                "y": 2
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 9
+            },
+            {
+                "x": 5,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 2
+            },
+            {
+                "x": 1,
+                "y": 10
+            },
+            {
+                "x": 6,
+                "y": 6
+            },
+            {
+                "x": 7,
+                "y": 5
+            },
+            {
+                "x": 9,
+                "y": 1
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 2,
+                "y": 8
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 4,
+                "y": 10,
+                "direction": "left-down"
+            },
+            {
+                "x": 0,
+                "y": 9,
+                "direction": "right-up"
+            },
+            {
+                "x": 10,
+                "y": 1,
+                "direction": "left-up"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 8,
+                "direction": "left-up"
+            },
+            {
+                "x": 2,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 7,
+                "y": 5,
+                "direction": "left-down"
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 3,
+                "y": 4,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 11,
+                "y": 3,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 9,
+                "hit": false
+            },
+            {
+                "x": 8,
+                "y": 5,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 6,
+                "y": 8,
+                "direction": "up"
+            },
+            {
+                "x": 0,
+                "y": 0,
+                "direction": "left"
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "direction": "up"
+            },
+            {
+                "x": 6,
+                "y": 11,
+                "direction": "up"
+            }
+        ]
+    },
+    {
+        "gridSize": 8,
+        "robot": {
+            "x": 3,
+            "y": 7
+        },
+        "walls": [
+            {
+                "x": 4,
+                "y": 4
+            },
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 2,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 0
+            },
+            {
+                "x": 1,
+                "y": 5
+            },
+            {
+                "x": 0,
+                "y": 3
+            },
+            {
+                "x": 2,
+                "y": 0
+            },
+            {
+                "x": 6,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 4
+            },
+            {
+                "x": 6,
+                "y": 7
+            },
+            {
+                "x": 1,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 6
+            },
+            {
+                "x": 3,
+                "y": 6
+            },
+            {
+                "x": 1,
+                "y": 0
+            }
+        ],
+        "mirrors": [
+            {
+                "x": 6,
+                "y": 6,
+                "direction": "left-down"
+            },
+            {
+                "x": 6,
+                "y": 7,
+                "direction": "right-up"
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "direction": "right-up"
+            },
+            {
+                "x": 6,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 3,
+                "y": 1,
+                "direction": "left-down"
+            },
+            {
+                "x": 5,
+                "y": 4,
+                "direction": "right-down"
+            },
+            {
+                "x": 6,
+                "y": 3,
+                "direction": "left-up"
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "direction": "right-down"
+            },
+            {
+                "x": 5,
+                "y": 0,
+                "direction": "right-up"
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "direction": "left-down"
+            }
+        ],
+        "targets": [
+            {
+                "x": 0,
+                "y": 7,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 6,
+                "y": 5,
+                "hit": false
+            },
+            {
+                "x": 4,
+                "y": 2,
+                "hit": false
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "hit": false
+            },
+            {
+                "x": 2,
+                "y": 5,
+                "hit": false
+            }
+        ],
+        "emitters": [
+            {
+                "x": 0,
+                "y": 6,
+                "direction": "right"
+            },
+            {
+                "x": 7,
+                "y": 6,
+                "direction": "up"
+            },
+            {
+                "x": 2,
+                "y": 2,
+                "direction": "left"
+            },
+            {
+                "x": 3,
+                "y": 6,
+                "direction": "down"
+            },
+            {
+                "x": 4,
+                "y": 0,
+                "direction": "right"
+            }
+        ]
+    }
+];
         
         // Current level data
         let level = null;
@@ -318,7 +5873,27 @@
             resizeCanvas();
             
             // Draw the game
-            drawGame();
+            
+drawGame();
+document.getElementById('coord-display').textContent = `Position: (${robot.x}, ${robot.y})`;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+document.getElementById('moveSound').play();
+
+
+                moveCount++;
+                document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+
+
+            document.getElementById('coord-display').textContent = 
+                `Position: (${robot.x}, ${robot.y})`;
+
             return true;
         }
         
@@ -601,7 +6176,27 @@
             if (moved) {
                 robot.x = newX;
                 robot.y = newY;
-                drawGame();
+                
+drawGame();
+document.getElementById('coord-display').textContent = `Position: (${robot.x}, ${robot.y})`;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+document.getElementById('moveSound').play();
+
+
+                moveCount++;
+                document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+
+
+            document.getElementById('coord-display').textContent = 
+                `Position: (${robot.x}, ${robot.y})`;
+
             }
             
             return moved;
@@ -632,7 +6227,27 @@
                 lasers.push(laser);
             });
             
-            drawGame();
+            
+drawGame();
+document.getElementById('coord-display').textContent = `Position: (${robot.x}, ${robot.y})`;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+document.getElementById('moveSound').play();
+
+
+                moveCount++;
+                document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+
+
+            document.getElementById('coord-display').textContent = 
+                `Position: (${robot.x}, ${robot.y})`;
+
             checkLevelComplete();
         }
         
@@ -687,7 +6302,10 @@
                 // Check if hit a target
                 const hitTarget = targets.find(target => target.x === currentX && target.y === currentY);
                 if (hitTarget && !hitTarget.hit) {
-                    hitTarget.hit = true;
+                    
+hitTarget.hit = true;
+document.getElementById('hitSound').play();
+
                 }
                 
                 // Check if hit an emitter (stop laser)
@@ -745,7 +6363,10 @@
                 showMessage("Level Complete! 🎉");
                 
                 setTimeout(() => {
-                    document.getElementById("level-complete").classList.add("show");
+                    
+document.getElementById("level-complete").classList.add("show");
+document.getElementById("levelCompleteSound").play();
+
                 }, 1000);
             }
         }
@@ -765,7 +6386,16 @@
         
         // Restart current level
         function restartLevel() {
-            loadLevel(currentLevel);
+            moveCount = 0;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+loadLevel(currentLevel);
             closeModals();
             showMessage("Level restarted");
         }
@@ -773,7 +6403,16 @@
         // Go to next level
         function nextLevel() {
             currentLevel++;
-            loadLevel(currentLevel);
+            moveCount = 0;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+loadLevel(currentLevel);
             closeModals();
             showMessage("Level " + (currentLevel + 1));
         }
@@ -781,7 +6420,16 @@
         // Restart game from beginning
         function restartGame() {
             currentLevel = 0;
-            loadLevel(currentLevel);
+            moveCount = 0;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+loadLevel(currentLevel);
             closeModals();
             showMessage("Game restarted");
         }
@@ -806,7 +6454,27 @@
         // Handle window resize
         window.addEventListener('resize', () => {
             resizeCanvas();
-            drawGame();
+            
+drawGame();
+document.getElementById('coord-display').textContent = `Position: (${robot.x}, ${robot.y})`;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+document.getElementById('moveSound').play();
+
+
+                moveCount++;
+                document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+
+
+            document.getElementById('coord-display').textContent = 
+                `Position: (${robot.x}, ${robot.y})`;
+
         });
         
         // Add event listeners for buttons
@@ -821,7 +6489,15 @@
         document.getElementById('next-level-btn').addEventListener('click', nextLevel);
         document.getElementById('restart-game-btn').addEventListener('click', restartGame);
         
-        // Add keyboard controls
+        
+document.addEventListener('DOMContentLoaded', () => {
+    const bgMusic = document.getElementById('bgMusic');
+    document.body.addEventListener('click', () => {
+        bgMusic.play();
+    }, { once: true });
+});
+
+// Add keyboard controls
         document.addEventListener('keydown', (event) => {
             if (event.key === 'ArrowUp') {
                 moveRobot('up');
@@ -842,8 +6518,24 @@
         });
         
         // Initialize the first level
-        loadLevel(currentLevel);
+        moveCount = 0;
+document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+                if (moveCount > MIN_MOVES[currentLevel] + 2) {
+                    showMessage("Too many moves! Restarting level...");
+                    setTimeout(() => {
+                        restartLevel();
+                    }, 1500);
+                }
+
+loadLevel(currentLevel);
         showMessage("Use arrows or buttons to move. Press Fire Laser to shoot.");
     </script>
+
+<audio id="moveSound" src="sounds/move.mp3"></audio>
+<audio id="laserSound" src="sounds/laser.mp3"></audio>
+<audio id="hitSound" src="sounds/hit.mp3"></audio>
+<audio id="levelCompleteSound" src="sounds/complete.mp3"></audio>
+<audio id="bgMusic" src="sounds/music.mp3" loop></audio>
+
 </body>
 </html>
