@@ -2,11 +2,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Laser Labyrinth - Load Fix</title>
+  <meta charset="UTF-8" />
+  <title>Laser Labyrinth - Debug</title>
   <style>
     body { background: #111; color: white; font-family: sans-serif; margin: 0; }
     header { background: #222; padding: 10px; text-align: center; }
+    #status { text-align: center; color: lime; margin: 10px; font-weight: bold; }
     canvas { display: block; margin: 20px auto; background: #000; border: 2px solid white; }
     #controls { text-align: center; margin-bottom: 20px; }
     #controls button {
@@ -17,7 +18,8 @@
   </style>
 </head>
 <body>
-  <header>Laser Labyrinth - Load Fix Version</header>
+  <header>Laser Labyrinth - Debug Version</header>
+  <div id="status">Loading...</div>
   <canvas id="game" width="400" height="400"></canvas>
   <div id="controls">
     <button onclick="move(0, -1)">Up</button>
@@ -26,13 +28,19 @@
     <button onclick="move(0, 1)">Down</button>
     <button onclick="fire()">Fire</button>
   </div>
-  <audio id="laserSound" src="https://cdn.pixabay.com/download/audio/2022/03/26/audio_4cfae1f66b.mp3?filename=laser-gun-81820.mp3" preload="auto"></audio>
 
   <script>
     window.onload = function() {
+      const status = document.getElementById("status");
+      status.innerText = "Game Loaded";
+
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
-      const laserSound = document.getElementById("laserSound");
+
+      if (!ctx) {
+        status.innerText = "Canvas context failed to initialize.";
+        return;
+      }
 
       const gridSize = 8, cellSize = 50;
       let direction = { x: 1, y: 0 };
@@ -45,6 +53,7 @@
       ];
 
       function drawGrid(path = []) {
+        status.innerText = "Drawing grid...";
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (let y = 0; y < gridSize; y++) {
           for (let x = 0; x < gridSize; x++) {
@@ -60,40 +69,6 @@
         ctx.beginPath();
         ctx.arc(target.x * cellSize + 25, target.y * cellSize + 25, 10, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.fillStyle = "gray";
-        for (const w of walls) {
-          ctx.fillRect(w.x * cellSize + 5, w.y * cellSize + 5, 40, 40);
-        }
-
-        ctx.strokeStyle = "white";
-        for (const m of mirrors) {
-          ctx.beginPath();
-          if (m.type === "/") {
-            ctx.moveTo(m.x * cellSize + 5, m.y * cellSize + 45);
-            ctx.lineTo(m.x * cellSize + 45, m.y * cellSize + 5);
-          } else {
-            ctx.moveTo(m.x * cellSize + 5, m.y * cellSize + 5);
-            ctx.lineTo(m.x * cellSize + 45, m.y * cellSize + 45);
-          }
-          ctx.stroke();
-        }
-
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
-        for (let i = 1; i < path.length; i++) {
-          ctx.beginPath();
-          ctx.moveTo(path[i - 1].x * cellSize + 25, path[i - 1].y * cellSize + 25);
-          ctx.lineTo(path[i].x * cellSize + 25, path[i].y * cellSize + 25);
-          ctx.stroke();
-
-          if (mirrors.some(m => m.x === path[i].x && m.y === path[i].y)) {
-            ctx.fillStyle = "orange";
-            ctx.beginPath();
-            ctx.arc(path[i].x * cellSize + 25, path[i].y * cellSize + 25, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
       }
 
       window.move = function(dx, dy) {
@@ -113,45 +88,8 @@
       }
 
       window.fire = function() {
-        let x = player.x;
-        let y = player.y;
-        let dx = direction.x;
-        let dy = direction.y;
-        let path = [{ x, y }];
-        laserSound.currentTime = 0;
-        laserSound.play();
-
-        function step() {
-          x += dx;
-          y += dy;
-          if (x < 0 || x >= gridSize || y < 0 || y >= gridSize || walls.some(w => w.x === x && w.y === y)) {
-            drawGrid(path);
-            return;
-          }
-
-          path.push({ x, y });
-
-          const mirror = mirrors.find(m => m.x === x && m.y === y);
-          if (mirror) {
-            if (mirror.type === "/") [dx, dy] = [-dy, -dx];
-            else [dx, dy] = [dy, dx];
-          }
-
-          drawGrid(path);
-
-          if (x === target.x && y === target.y) {
-            ctx.fillStyle = "lime";
-            ctx.beginPath();
-            ctx.arc(x * cellSize + 25, y * cellSize + 25, 6, 0, Math.PI * 2);
-            ctx.fill();
-            setTimeout(() => alert("Target hit!"), 300);
-            return;
-          }
-
-          setTimeout(step, 80);
-        }
-
-        step();
+        drawGrid(); // trigger draw to test button
+        status.innerText = "Fire button pressed!";
       }
 
       drawGrid();
