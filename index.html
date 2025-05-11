@@ -2,58 +2,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Laser Labyrinth - Final Fixed Full</title>
+  <meta charset="UTF-8">
+  <title>Laser Labyrinth - Stable Working Build</title>
   <style>
     body { background: #111; color: white; font-family: sans-serif; margin: 0; }
     header { background: #222; padding: 10px; text-align: center; }
     canvas { display: block; margin: 20px auto; background: #000; border: 2px solid white; }
-    #controls { text-align: center; margin-bottom: 20px; display: none; }
+    #controls { text-align: center; margin-bottom: 20px; }
     #controls button {
       margin: 5px; padding: 10px 20px;
       font-size: 16px; background: #00ccff;
       border: none; border-radius: 5px; color: black;
     }
-    #modal {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.9); color: white;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      z-index: 9999;
-    }
-    #modal button {
-      margin-top: 20px; padding: 10px 30px;
-      font-size: 18px; background: #00ccff;
-      border: none; border-radius: 6px; color: black;
-    }
   </style>
 </head>
 <body>
-  <header>Laser Labyrinth - Final Playable</header>
+  <header>Laser Labyrinth - Stable Final</header>
   <canvas id="game" width="400" height="400"></canvas>
-
   <div id="controls">
-    <button onclick="slide(0, -1)">Up</button>
-    <button onclick="slide(-1, 0)">Left</button>
-    <button onclick="slide(1, 0)">Right</button>
-    <button onclick="slide(0, 1)">Down</button>
+    <button onclick="move(0, -1)">Up</button>
+    <button onclick="move(-1, 0)">Left</button>
+    <button onclick="move(1, 0)">Right</button>
+    <button onclick="move(0, 1)">Down</button>
     <button onclick="fire()">Fire</button>
   </div>
-
-  <div id="modal">
-    <h2>Level 1</h2>
-    <p>Use the laser to hit the target. Mirrors reflect. Walls block. Good luck!</p>
-    <button onclick="startGame()">Start</button>
-  </div>
-
   <audio id="laserSound" src="https://cdn.pixabay.com/download/audio/2022/03/26/audio_4cfae1f66b.mp3?filename=laser-gun-81820.mp3" preload="auto"></audio>
 
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
     const laserSound = document.getElementById("laserSound");
-    const controls = document.getElementById("controls");
-    const modal = document.getElementById("modal");
 
     const gridSize = 8, cellSize = 50;
     let direction = { x: 1, y: 0 };
@@ -65,9 +43,7 @@
       { x: 5, y: 2, type: "\" }
     ];
 
-    let gameActive = false;
-
-    function drawGrid(extra = []) {
+    function drawGrid(path = []) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (let y = 0; y < gridSize; y++) {
         for (let x = 0; x < gridSize; x++) {
@@ -102,32 +78,25 @@
         ctx.stroke();
       }
 
+      // Draw laser beam
       ctx.strokeStyle = "red";
       ctx.lineWidth = 2;
-      for (let i = 1; i < extra.length; i++) {
+      for (let i = 1; i < path.length; i++) {
         ctx.beginPath();
-        ctx.moveTo(extra[i - 1].x * cellSize + 25, extra[i - 1].y * cellSize + 25);
-        ctx.lineTo(extra[i].x * cellSize + 25, extra[i].y * cellSize + 25);
+        ctx.moveTo(path[i - 1].x * cellSize + 25, path[i - 1].y * cellSize + 25);
+        ctx.lineTo(path[i].x * cellSize + 25, path[i].y * cellSize + 25);
         ctx.stroke();
 
-        if (mirrors.some(m => m.x === extra[i].x && m.y === extra[i].y)) {
+        if (mirrors.some(m => m.x === path[i].x && m.y === path[i].y)) {
           ctx.fillStyle = "orange";
           ctx.beginPath();
-          ctx.arc(extra[i].x * cellSize + 25, extra[i].y * cellSize + 25, 4, 0, Math.PI * 2);
+          ctx.arc(path[i].x * cellSize + 25, path[i].y * cellSize + 25, 4, 0, Math.PI * 2);
           ctx.fill();
         }
       }
     }
 
-    function startGame() {
-      gameActive = true;
-      modal.style.display = "none";
-      controls.style.display = "block";
-      drawGrid();
-    }
-
-    function slide(dx, dy) {
-      if (!gameActive) return;
+    function move(dx, dy) {
       direction = { x: dx, y: dy };
       let nx = player.x;
       let ny = player.y;
@@ -144,7 +113,6 @@
     }
 
     function fire() {
-      if (!gameActive) return;
       let x = player.x;
       let y = player.y;
       let dx = direction.x;
@@ -165,11 +133,8 @@
 
         const mirror = mirrors.find(m => m.x === x && m.y === y);
         if (mirror) {
-          if (mirror.type === "/") {
-            [dx, dy] = [-dy, -dx];
-          } else {
-            [dx, dy] = [dy, dx];
-          }
+          if (mirror.type === "/") [dx, dy] = [-dy, -dx];
+          else [dx, dy] = [dy, dx];
         }
 
         drawGrid(path);
@@ -179,7 +144,7 @@
           ctx.beginPath();
           ctx.arc(x * cellSize + 25, y * cellSize + 25, 6, 0, Math.PI * 2);
           ctx.fill();
-          setTimeout(() => alert("Target hit with full FX!"), 300);
+          setTimeout(() => alert("Target hit!"), 300);
           return;
         }
 
