@@ -2,36 +2,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Laser Labyrinth</title>
+  <meta charset="UTF-8" />
+  <title>Laser Labyrinth - Final Effects</title>
+  <style>
+    body { background: #111; color: white; font-family: sans-serif; margin: 0; }
+    header { background: #222; padding: 10px; text-align: center; }
+    canvas { display: block; margin: 20px auto; background: #000; border: 2px solid white; }
+    #controls {
+      text-align: center; margin-bottom: 20px;
+    }
+    #controls button {
+      margin: 5px; padding: 10px 20px;
+      font-size: 16px; background: #00ccff;
+      border: none; border-radius: 5px; color: black;
+    }
+  </style>
 </head>
 <body>
-    <h1>Laser Labyrinth</h1>
-    <p>Click anywhere to enable sound</p>
+  <header>Laser Labyrinth - Final Effects</header>
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="controls">
+    <button onclick="slide(0, -1)">Up</button>
+    <button onclick="slide(-1, 0)">Left</button>
+    <button onclick="slide(1, 0)">Right</button>
+    <button onclick="slide(0, 1)">Down</button>
+    <button onclick="fire()">Fire</button>
+  </div>
 
-    <!-- Audio elements -->
-    <audio id="bgMusic" src="sounds/music.mp3" loop></audio>
-    <audio id="moveSound" src="sounds/move.mp3"></audio>
-    <audio id="laserSound" src="sounds/laser.mp3"></audio>
-    <audio id="hitSound" src="sounds/hit.mp3"></audio>
-    <audio id="levelCompleteSound" src="sounds/complete.mp3"></audio>
+  <audio id="laserSound" src="https://cdn.pixabay.com/download/audio/2022/03/26/audio_4cfae1f66b.mp3?filename=laser-gun-81820.mp3" preload="auto"></audio>
 
-    <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const bgMusic = document.getElementById("bgMusic");
-        const move = document.getElementById("moveSound");
-        const laser = document.getElementById("laserSound");
-        const hit = document.getElementById("hitSound");
-        const complete = document.getElementById("levelCompleteSound");
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const laserSound = document.getElementById("laserSound");
 
-        document.body.addEventListener("click", () => {
-            bgMusic.play().catch(() => {});
-            move.play().catch(() => {}); move.pause(); move.currentTime = 0;
-            laser.play().catch(() => {}); laser.pause(); laser.currentTime = 0;
-            hit.play().catch(() => {}); hit.pause(); hit.currentTime = 0;
-            complete.play().catch(() => {}); complete.pause(); complete.currentTime = 0;
-        }, { once: true });
-    });
-    </script>
+    const gridSize = 8, cellSize = 50;
+    let direction = { x: 1, y: 0 };
+    let player = { x: 1, y: 1 };
+    let target = { x: 6, y: 1 };
+    const walls = [{ x: 4, y: 1 }];
+    const mirrors = [
+      { x: 2, y: 1, type: "/" },
+      { x: 5, y: 2, type: "\" }
+    ];
+
+    function drawGrid(extra = []) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          ctx.strokeStyle = "#333";
+          ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+
+      ctx.fillStyle = "cyan";
+      ctx.fillRect(player.x * cellSize + 10, player.y * cellSize + 10, 30, 30);
+
+      ctx.fillStyle = "yellow";
+      ctx.beginPath();
+      ctx.arc(target.x * cellSize + 25, target.y * cellSize + 25, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "gray";
+      for (const w of walls) {
+        ctx.fillRect(w.x * cellSize + 5, w.y * cellSize + 5, 40, 40);
+      }
+
+      ctx.strokeStyle = "white";
+      for (const m of mirrors) {
+        ctx.beginPath();
+        if (m.type === "/") {
+          ctx.moveTo(m.x * cellSize + 5, m.y * cellSize + 45);
+          ctx.lineTo(m.x * cellSize + 45, m.y * cellSize + 5);
+        } else {
+          ctx.moveTo(m.x * cellSize + 5, m.y * cellSize + 5);
+          ctx.lineTo(m.x * cellSize + 45, m.y * cellSize + 45);
+        }
+        ctx.stroke();
+      }
+
+      // Draw animated laser trail
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+      for (let i = 1; i < extra.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(extra[i - 1].x * cellSize + 25, extra[i - 1].y * cellSize + 25);
+        ctx.lineTo(extra[i].x * cellSize + 25, extra[i].y * cellSize + 25);
+        ctx.stroke();
+
+        // Particle sparks
+        if (mirrors.some(m => m.x === extra[i].x && m.y === extra[i].y)) {
+          ctx.fillStyle = "orange";
+          ctx.beginPath();
+          ctx.arc(extra[i].x * cellSize + 25, extra[i].y * cellSize + 25, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function slide(dx, dy) {
+      direction = { x: dx, y: dy };
+      let nx = player.x;
+      let ny = player.y;
+      while (true) {
+        const tx = nx + dx;
+        const ty = ny + dy;
+        if (tx < 0 || tx >= gridSize || ty < 0 || ty >= gridSize || walls.some(w => w.x === tx && w.y === ty)) break;
+        nx = tx;
+        ny = ty;
+      }
+      player.x = nx;
+      player.y = ny;
+      drawGrid();
+    }
+
+    function fire() {
+      let x = player.x;
+      let y = player.y;
+      let dx = direction.x;
+      let dy = direction.y;
+      let path = [{ x, y }];
+      laserSound.currentTime = 0;
+      laserSound.play();
+
+      function step() {
+        x += dx;
+        y += dy;
+        if (x < 0 || x >= gridSize || y < 0 || y >= gridSize || walls.some(w => w.x === x && w.y === y)) {
+          drawGrid(path);
+          return;
+        }
+
+        path.push({ x, y });
+
+        const mirror = mirrors.find(m => m.x === x && m.y === y);
+        if (mirror) {
+          if (mirror.type === "/") {
+            [dx, dy] = [-dy, -dx];
+          } else {
+            [dx, dy] = [dy, dx];
+          }
+        }
+
+        drawGrid(path);
+
+        if (x === target.x && y === target.y) {
+          ctx.fillStyle = "lime";
+          ctx.beginPath();
+          ctx.arc(x * cellSize + 25, y * cellSize + 25, 6, 0, Math.PI * 2);
+          ctx.fill();
+          setTimeout(() => alert("Target hit with full FX!"), 300);
+          return;
+        }
+
+        setTimeout(step, 80);
+      }
+
+      step();
+    }
+
+    drawGrid();
+  </script>
 </body>
 </html>
